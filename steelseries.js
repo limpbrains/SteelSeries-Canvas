@@ -2110,6 +2110,18 @@ var steelseries = (function () {
             playAlarm = (undefined === parameters.playAlarm ? false : parameters.playAlarm),
             alarmSound = (undefined === parameters.alarmSound ? false : parameters.alarmSound);
 
+        var lcdVisible = (undefined === parameters.lcdVisible ? true : parameters.lcdVisible);
+        var lcdColor = (undefined === parameters.lcdColor ? steelseries.LcdColor.STANDARD : parameters.lcdColor);
+        var digitalFont = (undefined === parameters.digitalFont ? false : parameters.digitalFont);
+        var lcdDecimals = (undefined === parameters.lcdDecimals ? 2 : parameters.lcdDecimals);
+
+        var tweenAverage;
+        var valueAverage = 0;
+        var angleAverage = this.valueAverage;
+
+        var pointerTypeAverage = (undefined === parameters.pointerTypeAverage ? steelseries.PointerType.TYPE3 : parameters.pointerTypeAverage);
+        var pointerColorAverage = (undefined === parameters.pointerColorAverage ? steelseries.ColorDef.RED : parameters.pointerColorAverage);
+
         // Create audio tag for alarm sound
         if (playAlarm && alarmSound !== false) {
             var audioElement = doc.createElement('audio');
@@ -2138,8 +2150,8 @@ var steelseries = (function () {
         var range = niceMaxValue - niceMinValue;
         var minorTickSpacing = 0;
         var majorTickSpacing = 0;
-        var maxNoOfMinorTicks = 10;
-        var maxNoOfMajorTicks = 10;
+        var maxNoOfMinorTicks = 5;
+        var maxNoOfMajorTicks = 5;
 
         var freeAreaAngle = 0;
         var rotationOffset = 1.25 * PI;
@@ -2168,6 +2180,15 @@ var steelseries = (function () {
         // Misc
         var ledPosX = 0.455 * imageWidth;
         var ledPosY = 0.51 * imageHeight;
+
+        // LCD
+        var lcdFontHeight = Math.floor(imageWidth / 10);
+        var stdFont = lcdFontHeight + 'px sans-serif';
+        var lcdFont = lcdFontHeight + 'px ' + lcdFontName;
+        var lcdHeight = imageHeight * 0.13;
+        var lcdWidth = imageWidth * 0.4;
+        var lcdPosX = (imageWidth - lcdWidth) / 2;
+        var lcdPosY = imageHeight * 0.39;
 
         // Method to calculate nice values for min, max and range for the tickmarks
         var calculate = function calculate() {
@@ -2242,6 +2263,14 @@ var steelseries = (function () {
         // Buffer for static foreground painting code
         var foregroundBuffer = createBuffer(size, size);
         var foregroundContext = foregroundBuffer.getContext('2d');
+
+        // Buffer for pointer average image painting code
+        var pointerBufferAverage = createBuffer(size, size);
+        var pointerContextAverage = pointerBufferAverage.getContext('2d');
+
+        // Buffer for pointer shadow
+        var pointerShadowBufferAverage = createBuffer(size, size);
+        var pointerShadowContextAverage = pointerShadowBufferAverage.getContext('2d');
 
         // **************   Image creation  ********************
         var drawPostsImage = function (ctx) {
@@ -2328,9 +2357,9 @@ var steelseries = (function () {
             ctx.strokeStyle = backgroundColor.labelColor.getRgbaColor();
             ctx.fillStyle = backgroundColor.labelColor.getRgbaColor();
 
-            ctx.font = 0.046728 * imageWidth + 'px sans-serif';
+            ctx.font = 0.1 * imageWidth + 'px sans-serif';
             titleWidth = ctx.measureText(titleString).width;
-            ctx.fillText(titleString, (imageWidth - titleWidth) / 2, imageHeight * 0.4, imageWidth * 0.3);
+            ctx.fillText(titleString, (imageWidth - titleWidth) / 2, imageHeight * 0.6, imageWidth * 0.3);
             unitWidth = ctx.measureText(unitString).width;
             ctx.fillText(unitString, (imageWidth - unitWidth) / 2, imageHeight * 0.47, imageWidth * 0.2);
 
@@ -2349,7 +2378,7 @@ var steelseries = (function () {
 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            var fontSize = Math.ceil(imageWidth * 0.04);
+            var fontSize = Math.ceil(imageWidth * 0.06);
             ctx.font = fontSize + 'px sans-serif';
             ctx.strokeStyle = backgroundColor.labelColor.getRgbaColor();
             ctx.fillStyle = backgroundColor.labelColor.getRgbaColor();
@@ -2366,7 +2395,7 @@ var steelseries = (function () {
             var MED_INNER_POINT = imageWidth * 0.415;
             var MINOR_INNER_POINT = imageWidth * 0.42;
             var TEXT_TRANSLATE_X = imageWidth * 0.48;
-            var TEXT_WIDTH = imageWidth * 0.0375;
+            var TEXT_WIDTH = imageWidth * 0.3;
             var HALF_MAX_NO_OF_MINOR_TICKS = maxNoOfMinorTicks / 2;
             var MAX_VALUE_ROUNDED = parseFloat(maxValue.toFixed(2));
             var i;
@@ -2383,26 +2412,28 @@ var steelseries = (function () {
                     ctx.closePath();
                     ctx.stroke();
                     ctx.save();
-                    ctx.translate(TEXT_TRANSLATE_X, 0);
-                    ctx.rotate(textRotationAngle);
-                    switch (labelNumberFormat.format) {
-                    case 'fractional':
-                        ctx.fillText((valueCounter.toFixed(2)), 0, 0, TEXT_WIDTH);
-                        break;
+                    if (i === 0 || i > MAX_VALUE_ROUNDED - minorTickSpacing * maxNoOfMinorTicks) {
+                        ctx.translate(TEXT_TRANSLATE_X, 0);
+                        ctx.rotate(textRotationAngle);
+                        switch (labelNumberFormat.format) {
+                        case 'fractional':
+                            ctx.fillText((valueCounter.toFixed(2)), 0, 0, TEXT_WIDTH);
+                            break;
 
-                    case 'scientific':
-                        ctx.fillText((valueCounter.toPrecision(2)), 0, 0, TEXT_WIDTH);
-                        break;
+                        case 'scientific':
+                            ctx.fillText((valueCounter.toPrecision(2)), 0, 0, TEXT_WIDTH);
+                            break;
 
-                    case 'standard':
-                    /* falls through */
-                    default:
-                        ctx.fillText((valueCounter.toFixed(0)), 0, 0, TEXT_WIDTH);
-                        break;
+                        case 'standard':
+                        /* falls through */
+                        default:
+                            ctx.fillText((valueCounter.toFixed(0)), 0, 0, TEXT_WIDTH);
+                            break;
+                        }
+                        ctx.translate(-TEXT_TRANSLATE_X, 0);
                     }
-                    ctx.translate(-TEXT_TRANSLATE_X, 0);
-                    ctx.restore();
 
+                    ctx.restore();
                     valueCounter += majorTickSpacing;
                     majorTickCounter = 0;
                     ctx.rotate(rotationStep);
@@ -2480,6 +2511,28 @@ var steelseries = (function () {
             ctx.restore();
         };
 
+        var drawLcdText = function (ctx, value) {
+            ctx.restore();
+            ctx.save();
+            ctx.textAlign = 'right';
+            ctx.strokeStyle = lcdColor.textColor;
+            ctx.fillStyle = lcdColor.textColor;
+            if (lcdColor === steelseries.LcdColor.STANDARD || lcdColor === steelseries.LcdColor.STANDARD_GREEN) {
+                ctx.shadowColor = 'gray';
+                ctx.shadowOffsetX = imageWidth * 0.007;
+                ctx.shadowOffsetY = imageWidth * 0.007;
+                ctx.shadowBlur = imageWidth * 0.007;
+            }
+            if (digitalFont) {
+                ctx.font = lcdFont;
+            } else {
+                ctx.font = stdFont;
+            }
+            ctx.fillText(value.toFixed(lcdDecimals), lcdPosX + lcdWidth - lcdWidth * 0.05, lcdPosY + lcdHeight * 0.5 + lcdFontHeight * 0.38, lcdWidth * 0.9);
+
+            ctx.restore();
+        };
+
         // **************   Initialization  ********************
         // Draw all static painting code to background
         var init = function (parameters) {
@@ -2489,6 +2542,8 @@ var steelseries = (function () {
             var drawLed = (undefined === parameters.led ? false : parameters.led);
             var drawPointer = (undefined === parameters.pointer ? false : parameters.pointer);
             var drawForeground = (undefined === parameters.foreground ? false : parameters.foreground);
+            var drawPointerAverage = (undefined === parameters.pointer ? false : parameters.pointer);
+            var drawLcd = true;
 
             initialized = true;
 
@@ -2584,11 +2639,22 @@ var steelseries = (function () {
                 backgroundContext.restore();
             }
 
+            // Draw lcd background
+            if (drawLcd) {
+                lcdBuffer = createLcdBackgroundImage(lcdWidth, lcdHeight, lcdColor);
+                backgroundContext.drawImage(lcdBuffer, lcdPosX, lcdPosY);
+            }
+
             // Create pointer image in pointer buffer (contentBuffer)
             if (drawPointer) {
                 drawPointerImage(pointerContext, imageWidth * 1.17, pointerType, pointerColor, backgroundColor.labelColor, false);
                 drawPointerImage(pointerShadowContext, imageWidth * 1.17, pointerType, pointerColor, backgroundColor.labelColor, true);
+            }
 
+            // Average
+            if (drawPointerAverage) {
+                drawPointerImage(pointerContextAverage, imageWidth * 1.17, pointerTypeAverage, pointerColorAverage, backgroundColor.labelColor, false);
+                drawPointerImage(pointerShadowContextAverage, imageWidth * 1.17, pointerTypeAverage, pointerColorAverage, backgroundColor.labelColor, true);
             }
 
             // Create foreground in foreground buffer (foregroundBuffer)
@@ -2643,6 +2709,14 @@ var steelseries = (function () {
                 pointerRotBuffer.width = size;
                 pointerRotBuffer.height = size;
                 pointerRotContext = pointerRotBuffer.getContext('2d');
+
+                pointerBufferAverage.width = size;
+                pointerBufferAverage.height = size;
+                pointerBufferContext = pointerBufferAverage.getContext('2d');
+
+                pointerShadowBufferAverage.width = size;
+                pointerShadowBufferAverage.height = size;
+                pointerShadowContextAverage = pointerShadowBufferAverage.getContext('2d');
             }
 
             if (resetForeground) {
@@ -2709,6 +2783,19 @@ var steelseries = (function () {
             return value;
         };
 
+        this.setMaxValue = function (value) {
+            maxValue = value;
+            resetBuffers({frame: true,
+                          background: true});
+            init({frame: true,
+                  background: true});
+            this.repaint();
+        };
+
+        this.getMaxValue = function () {
+            return maxValue;
+        };
+
         this.setValueAnimated = function (newValue) {
             var targetValue = (newValue < minValue ? minValue : (newValue > maxValue ? maxValue : newValue)),
                 gauge = this;
@@ -2746,6 +2833,35 @@ var steelseries = (function () {
                     }
                 };
                 tween.start();
+            }
+        };
+
+        this.setValueAnimatedAverage = function (newValue) {
+            var targetValue = (newValue < minValue ? minValue : (newValue > maxValue ? maxValue : newValue)),
+                gauge = this;
+
+
+            if (valueAverage !== targetValue) {
+                if (undefined !==  tweenAverage) {
+                    if (tweenAverage.playing) {
+                        tweenAverage.stop();
+                    }
+                }
+
+                //var diff = getShortestAngle(valueAverage, targetValue);
+                tweenAverage = new Tween({}, '', Tween.regularEaseInOut, valueAverage, targetValue, 1);
+                tweenAverage.onMotionChanged = function (event) {
+                    valueAverage = event.target._pos;
+
+                    if (!repainting) {
+                        repainting = true;
+                        requestAnimFrame(gauge.repaint);
+                    }
+                };
+
+
+                tweenAverage.start();
+                this.repaint();
             }
         };
 
@@ -2844,6 +2960,11 @@ var steelseries = (function () {
             // Draw buffered image to visible canvas
             mainCtx.drawImage(backgroundBuffer, 0, 0);
 
+            // Draw lcd display
+            if (lcdVisible) {
+                drawLcdText(mainCtx, value);
+            }
+
             // Draw led
             if (ledVisible) {
                 if (value < threshold) {
@@ -2879,12 +3000,41 @@ var steelseries = (function () {
                 mainCtx.restore();
             }
 
-            angle = rotationOffset + HALF_PI + (value - minValue) * angleStep;
 
             // we have to draw to a rotated temporary image area so we can translate in
             // absolute x, y values when drawing to main context
             var shadowOffset = imageWidth * 0.006;
             var pointerOffset = imageWidth * 1.17 / 2;
+
+            // average
+            angle = rotationOffset + HALF_PI + (valueAverage - minValue) * angleStep;
+
+            pointerRotContext.clearRect(0, 0, imageWidth, imageHeight);
+            pointerRotContext.save();
+            pointerRotContext.translate(centerX, centerY);
+            pointerRotContext.rotate(angle);
+            pointerRotContext.translate(-pointerOffset, -pointerOffset);
+            pointerRotContext.drawImage(pointerShadowBufferAverage, 0, 0);
+            pointerRotContext.restore();
+            if (steelseries.Orientation.NORTH === orientation) {
+                mainCtx.drawImage(pointerRotBuffer, 0, 0, imageWidth, imageHeight, shadowOffset, shadowOffset, imageWidth + shadowOffset, imageHeight + shadowOffset);
+            } else {
+                mainCtx.drawImage(pointerRotBuffer, 0, 0, imageWidth, imageHeight, -shadowOffset, shadowOffset, imageWidth - shadowOffset, imageHeight + shadowOffset);
+            }
+
+            mainCtx.save();
+
+            // Define rotation center
+            mainCtx.translate(centerX, centerY);
+            mainCtx.rotate(angle);
+
+            // Draw pointer
+            mainCtx.translate(-pointerOffset, -pointerOffset);
+            mainCtx.drawImage(pointerBufferAverage, 0, 0);
+            mainCtx.restore();
+
+            // value
+            angle = rotationOffset + HALF_PI + (value - minValue) * angleStep;
 
             pointerRotContext.clearRect(0, 0, imageWidth, imageHeight);
             pointerRotContext.save();
